@@ -168,7 +168,7 @@
       font-weight: 800;
       line-height: 0.82;
       padding-top: 0.06em;
-      color: #fff;
+      color: var(--blue);
       letter-spacing: 0;
     }
     .fall-shape svg { display: block; }
@@ -185,11 +185,30 @@
     body.paper .top { color: rgba(0, 0, 0, 0.6); }
     body.paper .smiley svg * { stroke: #000; }
     body.paper .zzz { color: #000; }
+    body.paperblue { background: #fff; color: var(--blue); }
+    body.paperblue a { color: var(--blue); text-decoration-color: rgba(31, 61, 255, 0.4); }
+    body.paperblue a:hover { color: #000; text-decoration-color: #000; }
+    body.paperblue .top { color: rgba(31, 61, 255, 0.75); }
+    body.paperblue .smiley svg * { stroke: var(--blue); }
+    body.paperblue .zzz { color: var(--blue); }
     body.bluepaper { background: var(--blue); color: #efebe3; }
     body.bluepaper a { color: #efebe3; text-decoration-color: rgba(239, 235, 227, 0.45); }
     body.bluepaper a:hover { color: #000; text-decoration-color: #000; }
     body.bluepaper .top { color: rgba(239, 235, 227, 0.8); }
     body.bluepaper .smiley svg * { stroke: #efebe3; }
+    .ascii-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .ascii-flower {
+      position: absolute;
+      bottom: -0.2em;
+      margin: 0;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      line-height: 1.15;
+      color: var(--blue);
+      white-space: pre;
+      transform-origin: 50% 100%;
+    }
+    .ascii-flower.bloomed { animation: sway 4s ease-in-out infinite; }
+    @keyframes sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
     .three-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
     .glitch-layer { position: fixed; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: normal; }
     .glitch-sq { position: absolute; }
@@ -365,7 +384,7 @@
       // Random mode per visit: smileys | letters | faces3d | shapes | glitch
       // (add ?mode=letters etc. to the URL to force one)
       // ------------------------------------------------------------
-      var MODES = ['smileys', 'smileysXL', 'letters', 'lettersXL', 'faces3d', 'shapes', 'shapesXL'];
+      var MODES = ['smileys', 'smileysXL', 'letters', 'lettersXL', 'faces3d', 'shapes', 'shapesXL', 'flowers', 'lettersXLblue'];
       var forced = new URLSearchParams(location.search).get('mode');
       var mode = MODES.indexOf(forced) >= 0 ? forced : MODES[Math.floor(Math.random() * MODES.length)];
       document.documentElement.setAttribute('data-mode', mode);
@@ -668,6 +687,68 @@
         if (glitchLayer) glitchLayer.innerHTML = '';
       }
 
+      // ---------- ASCII smiley flowers ----------
+      var flowerLayer = null, flowers = [], MAX_FLOWERS = 70;
+      var HEADS = [
+        [' \\ | / ', '-(◠‿◠)-', ' / | \\ '],
+        [' @@@@@ ', '@(◠‿◠)@', ' @@@@@ '],
+        [' * * * ', '*(◠‿◠)*', ' * * * '],
+        [' .-.-. ', '((◠‿◠))', " '-'-' "],
+        ['  ___  ', '{(◠‿◠)}', '  ‾‾‾  ']
+      ];
+      var STEMS = ['   |   ', '   |   ', '   |   ', '  \\|   ', '   |/  ', '  ~|   ', '   |~  '];
+      function flowerSize() { return Math.max(12, Math.min(innerWidth / 70, 18)); }
+      function maxStem() { return Math.floor((innerHeight * 0.85) / (flowerSize() * 1.15)) - 3; }
+      function renderFlower(f) { f.el.textContent = (f.bloomed ? f.head : []).concat(f.stems).join('\n'); }
+      function randomStem() { return STEMS[Math.floor(Math.random() * STEMS.length)]; }
+      function growFlower() {
+        if (flowers.length >= MAX_FLOWERS) return;
+        if (!flowerLayer) {
+          flowerLayer = document.createElement('div');
+          flowerLayer.className = 'ascii-layer';
+          document.body.appendChild(flowerLayer);
+        }
+        var fs = flowerSize();
+        var el = document.createElement('pre');
+        el.className = 'ascii-flower';
+        el.style.fontSize = fs + 'px';
+        el.style.left = (Math.random() * (innerWidth - fs * 5)) + 'px';
+        el.style.animationDelay = (-Math.random() * 4) + 's';
+        flowerLayer.appendChild(el);
+        var f = { el: el, head: HEADS[Math.floor(Math.random() * HEADS.length)], stems: [], bloomed: false };
+        flowers.push(f);
+        var height = 3 + Math.floor(Math.random() * 6), step = 0;
+        var t = setInterval(function () {
+          if (!el.isConnected) { clearInterval(t); return; }
+          if (step < height) {
+            f.stems.unshift(step < 2 ? '   |   ' : randomStem());
+          } else {
+            f.bloomed = true; el.classList.add('bloomed');
+            clearInterval(t);
+          }
+          renderFlower(f);
+          step++;
+        }, 55);
+      }
+      // Every click also makes the flowers already there a little taller
+      function growExisting() {
+        var limit = maxStem();
+        flowers.forEach(function (f) {
+          if (!f.bloomed || f.stems.length >= limit) return;
+          var n = 1 + Math.floor(Math.random() * 2), i = 0;
+          var t = setInterval(function () {
+            if (!f.el.isConnected || i >= n || f.stems.length >= limit) { clearInterval(t); return; }
+            f.stems.unshift(randomStem());
+            renderFlower(f);
+            i++;
+          }, 60);
+        });
+      }
+      function clearFlowers() {
+        flowers.forEach(function (f) { f.el.remove(); });
+        flowers.length = 0;
+      }
+
       // Preload what this visit's mode needs so the first click is instant
       if (/^(letters|shapes)/.test(mode)) getPhysics().catch(function () {});
       if (mode === 'faces3d') getThree().catch(function () {});
@@ -685,9 +766,10 @@
           locked = true;
           setBlue(true);
           if (!reduce && bouncers.length < 24 && clicks > 1) addBouncers(1, true);
-        } else if (mode === 'letters' || mode === 'lettersXL') {
+        } else if (mode === 'letters' || mode === 'lettersXL' || mode === 'lettersXLblue') {
           if (mode === 'lettersXL') document.body.classList.add('paper');
-          dropLetters(mode === 'lettersXL');
+          if (mode === 'lettersXLblue') document.body.classList.add('paperblue');
+          dropLetters(mode !== 'letters');
         } else if (mode === 'shapes' || mode === 'shapesXL') {
           var xl = mode === 'shapesXL';
           document.body.classList.add(xl ? 'bluepaper' : 'cream');
@@ -696,15 +778,20 @@
           getThree().then(function (T) { T.add(clicks === 1 ? 6 : 3); });
         } else if (mode === 'glitch') {
           glitch();
+        } else if (mode === 'flowers') {
+          document.body.classList.add('paperblue');
+          growExisting();
+          growFlower(); if (clicks === 1) { growFlower(); growFlower(); }
         }
       }
 
       function clearModes() {
         if (physics) physics.clear();
         if (three) three.clear();
+        clearFlowers();
         stopGlitch();
         glitchUntil = 0;
-        document.body.classList.remove('cream', 'paper', 'bluepaper');
+        document.body.classList.remove('cream', 'paper', 'bluepaper', 'paperblue');
       }
 
       // Stop fast clicks from selecting the text underneath
