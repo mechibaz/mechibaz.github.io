@@ -114,6 +114,7 @@
     }
     .bouncer svg circle, body.blue .smiley svg circle { fill: var(--blue); }
     body.blue .bouncer { opacity: 1; }
+    .bouncer.xl svg * { stroke-width: 1.3; }
 
     /* No text selection when clicking the face fast */
     .smiley { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -273,7 +274,8 @@
         var r = smiley.getBoundingClientRect();
         for (var i = 0; i < n; i++) {
           var el = document.createElement('div');
-          el.className = 'bouncer';
+          el.className = SIZE > 100 ? 'bouncer xl' : 'bouncer';
+          el.style.width = el.style.height = SIZE + 'px';
           el.innerHTML = svgMarkup;
           document.body.appendChild(el);
           var speed = 70 + Math.random() * 90; // px per second
@@ -363,7 +365,7 @@
       // Random mode per visit: smileys | letters | faces3d | shapes | glitch
       // (add ?mode=letters etc. to the URL to force one)
       // ------------------------------------------------------------
-      var MODES = ['smileys', 'letters', 'lettersXL', 'faces3d', 'shapes', 'shapesXL', 'glitch'];
+      var MODES = ['smileys', 'smileysXL', 'letters', 'lettersXL', 'faces3d', 'shapes', 'shapesXL'];
       var forced = new URLSearchParams(location.search).get('mode');
       var mode = MODES.indexOf(forced) >= 0 ? forced : MODES[Math.floor(Math.random() * MODES.length)];
       document.documentElement.setAttribute('data-mode', mode);
@@ -677,6 +679,12 @@
           if (!reduce && bouncers.length < MAX_FACES) {
             addBouncers(Math.min(4 + Math.round(clicks * 1.6), MAX_FACES - bouncers.length), true);
           }
+        } else if (mode === 'smileysXL') {
+          SIZE = Math.round(Math.max(220, Math.min(innerWidth, innerHeight) * 0.62));
+          START_COUNT = 2;
+          locked = true;
+          setBlue(true);
+          if (!reduce && bouncers.length < 24 && clicks > 1) addBouncers(1, true);
         } else if (mode === 'letters' || mode === 'lettersXL') {
           if (mode === 'lettersXL') document.body.classList.add('paper');
           dropLetters(mode === 'lettersXL');
