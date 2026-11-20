@@ -107,6 +107,50 @@
     .bouncer svg circle, body.blue .smiley svg circle { fill: var(--blue); }
     body.blue .bouncer { opacity: 1; }
 
+    /* No text selection when clicking the face fast */
+    .smiley { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+    /* Tired face parts: hidden unless .tired */
+    .smiley.done { cursor: default; transform: none !important; }
+    .smiley .t { display: none; }
+    .smiley.tired .t { display: inline; }
+    .smiley.tired .h { display: none; }
+    .zzz {
+      position: absolute;
+      font-size: 11px;
+      pointer-events: none;
+      opacity: 0;
+      animation: zzz 2.4s ease-out infinite;
+    }
+    .zzz:nth-child(2) { animation-delay: 0.8s; }
+    .zzz:nth-child(3) { animation-delay: 1.6s; }
+    @keyframes zzz {
+      0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+      20% { opacity: 0.8; }
+      100% { transform: translate(14px, -26px) scale(1.2); opacity: 0; }
+    }
+    .zzzs { position: absolute; left: 50%; top: 0; margin-left: 22px; display: none; }
+    .smiley-wrap { position: relative; display: inline-block; }
+    .smiley-wrap.tired .zzzs { display: block; }
+
+    /* Click-count message over a blurred page */
+    .message {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.15);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .message.show { opacity: 1; }
+
   </style>
 </head>
 <body>
@@ -115,14 +159,20 @@
   </header>
 
   <main>
-    <div class="smiley" id="smiley" role="img" aria-label="Smiley face">
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="44" />
-        <path class="eye" d="M31 45 a4.5 4.5 0 0 1 9 0" />
-        <path class="eye" d="M60 45 a4.5 4.5 0 0 1 9 0" />
-        <path d="M50 36.5 L57.5 52 L50 52" />
-        <path class="mouth" d="M25 56 C27 86, 73 86, 75 56" />
-      </svg>
+    <div class="smiley-wrap" id="smileyWrap">
+      <div class="smiley" id="smiley" role="img" aria-label="Smiley face">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="44" />
+          <path class="eye h" d="M31 45 a4.5 4.5 0 0 1 9 0" />
+          <path class="eye h" d="M60 45 a4.5 4.5 0 0 1 9 0" />
+          <path class="t" d="M30 46 Q35.5 49 41 46" />
+          <path class="t" d="M59 46 Q64.5 49 70 46" />
+          <path d="M50 36.5 L57.5 52 L50 52" />
+          <path class="mouth h" d="M25 56 C27 86, 73 86, 75 56" />
+          <path class="t" d="M38 68 Q44 65 50 68 T62 68" />
+        </svg>
+      </div>
+      <div class="zzzs" aria-hidden="true"><span class="zzz">z</span><span class="zzz">z</span><span class="zzz">z</span></div>
     </div>
     <h1>Mercedes Bazan</h1>
     <a href="mailto:mechibaz@gmail.com">mechibaz@gmail.com</a>
@@ -132,6 +182,8 @@
       <a href="https://www.linkedin.com/in/mercedes-bazan-2021bb21/" target="_blank" rel="noopener">LinkedIn</a>
     </nav>
   </main>
+
+  <div class="message" id="message" aria-live="polite"></div>
 
   <script>
     (function () {
@@ -149,7 +201,7 @@
       var smiley = document.getElementById('smiley');
       var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       var locked = false;
-      var clicks = 0, MAX_CLICKS = 20;
+      var clicks = 0;
 
       // DVD-style bouncing smileys (blue mode)
       var svgMarkup = smiley.querySelector('svg').outerHTML;
@@ -227,14 +279,52 @@
         }, 450);
       }
 
-      // Each click keeps it blue and adds more faces, more each time.
-      // On the 20th click it's packed, then everything clears back to black.
+      var wrap = document.getElementById('smileyWrap');
+      var message = document.getElementById('message');
+      var msgTimer = null;
+      var MAX_FACES = 400;
+      var done = false;
+
+      function showMessage(text) {
+        message.textContent = text;
+        message.classList.add('show');
+        clearTimeout(msgTimer);
+        msgTimer = setTimeout(function () { message.classList.remove('show'); }, 2600);
+      }
+
+      function setTired(on) {
+        smiley.classList.toggle('tired', on);
+        wrap.classList.toggle('tired', on);
+      }
+
+      // Stop fast clicks from selecting the text underneath
+      smiley.addEventListener('mousedown', function (e) { e.preventDefault(); });
+
+      // Clicks: blue + more faces each time (capped so the page stays smooth).
+      // 150 clicks: a message. 300: "nice". 600: back to black, tired face, no more clicking.
       smiley.addEventListener('click', function () {
+        if (done) return;
         clicks++;
-        if (clicks >= MAX_CLICKS) { reset(); return; }
+
+        if (clicks >= 600) {
+          done = true;
+          reset();
+          setTired(true);
+          smiley.classList.add('done');
+          clearTimeout(msgTimer);
+          message.classList.remove('show');
+          return;
+        }
+
         locked = true;
         setBlue(true);
-        if (!reduce) addBouncers(4 + Math.round(clicks * 1.6), true);
+        if (!reduce && bouncers.length < MAX_FACES) {
+          addBouncers(Math.min(4 + Math.round(clicks * 1.6), MAX_FACES - bouncers.length), true);
+        }
+
+        if (clicks === 150) showMessage('why are you clicking so much? :)');
+        if (clicks === 300) showMessage('nice');
+
         smiley.classList.add('happy');
         setTimeout(function () { smiley.classList.remove('happy'); }, 300);
       });
