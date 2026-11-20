@@ -191,7 +191,7 @@
     .three-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
     .glitch-layer { position: fixed; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: normal; }
     .glitch-sq { position: absolute; }
-    body.glitching main { text-shadow: 3px 0 #ff3fa4, -3px 0 #00e5ff; }
+    body.glitching main { text-shadow: 3px 0 #8a3dff, -3px 0 #ffffff; }
 
   </style>
 </head>
@@ -435,9 +435,10 @@
       var LETTERS = 'MECHIBAZ'.split('');
       function dropLetters(xl) {
         getPhysics().then(function (P) {
-          if (P.items.length >= (xl ? 24 : 48)) return;
-          var size = xl ? Math.max(90, Math.min(innerWidth * 0.2, 290)) : Math.max(60, Math.min(innerWidth * 0.125, 175));
-          LETTERS.forEach(function (ch, i) {
+          if (P.items.length >= (xl ? 10 : 48)) return;
+          var size = xl ? Math.max(200, Math.min(innerWidth * 0.42, innerHeight * 0.75, 620)) : Math.max(60, Math.min(innerWidth * 0.125, 175));
+          var batch = xl ? LETTERS.slice((clicks - 1) * 2 % 8, (clicks - 1) * 2 % 8 + 2) : LETTERS;
+          batch.forEach(function (ch, i) {
             setTimeout(function () {
               var el = document.createElement('div');
               el.className = 'fall-letter';
@@ -445,7 +446,7 @@
               el.style.fontSize = size + 'px';
               P.layer.appendChild(el);
               var w = el.offsetWidth, h = el.offsetHeight;
-              var x = w / 2 + Math.random() * (innerWidth - w);
+              var x = innerWidth / 2 + (Math.random() - 0.5) * Math.max(0, innerWidth - w);
               var body = P.M.Bodies.rectangle(x, -h - Math.random() * 120, w, h * 0.78, {
                 restitution: 0.15, friction: 0.6, density: 0.002, chamfer: { radius: 4 }
               });
@@ -473,11 +474,11 @@
       }
       function dropShape(xl) {
         getPhysics().then(function (P) {
-          if (P.items.length >= (xl ? 22 : MAX_SHAPES)) return;
+          if (P.items.length >= (xl ? 7 : MAX_SHAPES)) return;
           var BLUE = xl ? '#efebe3' : '#1f3dff';
-          var M = P.M, s = xl ? Math.max(130, Math.min(innerWidth * 0.3, 400)) : Math.max(95, Math.min(innerWidth * 0.19, 260));
+          var M = P.M, s = xl ? Math.max(260, Math.min(innerWidth * 0.55, innerHeight * 0.8, 720)) : Math.max(95, Math.min(innerWidth * 0.19, 260));
           var kind = ['triangle', 'star', 'blob', 'tile', 'circle'][Math.floor(Math.random() * 5)];
-          var x = s + Math.random() * (innerWidth - 2 * s), y = -s * 1.2;
+          var x = innerWidth / 2 + (Math.random() - 0.5) * Math.max(0, innerWidth - 2 * s), y = -s * 1.2;
           var opts = { restitution: 0.1, friction: 0.7, density: 0.002 };
           var body, svg, w, h;
           if (kind === 'triangle') {
@@ -624,7 +625,7 @@
 
       // ---------- 5. Glitch ----------
       var glitchUntil = 0, glitchTimer = null, glitchLayer = null;
-      var GLITCH_COLORS = [BLUE, '#ff3fa4', '#ffe14d', '#2ee59d', '#ff6a2b', '#ffffff', '#00e5ff'];
+      var GLITCH_COLORS = ['#ffffff', '#8a3dff', '#ffffff', '#b98bff', '#5a1fd6'];
       function glitch() {
         if (reduce) return;
         if (!glitchLayer) {
@@ -653,7 +654,6 @@
           var dx = (Math.random() - 0.5) * 18, top = Math.random() * 80;
           main.style.transform = 'translateX(' + dx + 'px)';
           main.style.clipPath = Math.random() < 0.5 ? 'inset(' + top + '% 0 ' + (100 - top - 8 - Math.random() * 20) + '% 0)' : '';
-          document.body.style.filter = Math.random() < 0.25 ? 'hue-rotate(' + Math.floor(Math.random() * 360) + 'deg) invert(' + (Math.random() < 0.3 ? 1 : 0) + ')' : '';
         }, 70);
       }
       function stopGlitch() {
@@ -682,7 +682,7 @@
         } else if (mode === 'shapes' || mode === 'shapesXL') {
           var xl = mode === 'shapesXL';
           document.body.classList.add(xl ? 'bluepaper' : 'cream');
-          dropShape(xl); if (clicks === 1) { dropShape(xl); if (!xl) dropShape(xl); }
+          dropShape(xl); if (clicks === 1 && !xl) { dropShape(xl); dropShape(xl); }
         } else if (mode === 'faces3d') {
           getThree().then(function (T) { T.add(clicks === 1 ? 6 : 3); });
         } else if (mode === 'glitch') {
