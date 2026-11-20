@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mercedes Bazan</title>
+  <meta name="description" content="Mercedes Bazan. Mechibaz studio.">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    :root { --blue: #1f3dff; }
+    body {
+      transition: background-color 0.4s ease;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      overflow: hidden;
+    }
+    main { font-size: 14px; line-height: 2.2; text-align: center; }
+    h1 { font-size: inherit; font-weight: 400; }
+    a {
+      color: #fff;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 4px;
+      text-decoration-color: rgba(255, 255, 255, 0.4);
+      transition: color 0.15s ease, text-decoration-color 0.15s ease;
+    }
+    a:hover, a:focus-visible { color: var(--blue); text-decoration-color: var(--blue); outline: none; }
+    body.blue { background: var(--blue); }
+    body.blue a:hover, body.blue a:focus-visible { color: #000; text-decoration-color: #000; }
+    body.blue .top { color: rgba(255, 255, 255, 0.85); }
+    nav {
+      margin-top: 0.5rem;
+      display: flex;
+      justify-content: center;
+      gap: 0.875rem;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    /* Smiley */
+    .smiley {
+      display: inline-block;
+      width: 56px;
+      height: 56px;
+      margin-bottom: 1.25rem;
+      cursor: pointer;
+      transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .smiley svg { width: 100%; height: 100%; overflow: visible; }
+    .smiley svg * {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .smiley .eye, .smiley .mouth {
+      transform-box: fill-box;
+      transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .smiley .eye { transform-origin: center bottom; }
+    .smiley .mouth { transform-origin: center top; }
+
+    .smiley:hover { transform: translateY(-2px) rotate(-4deg); }
+    .smiley.happy { transform: scale(1.05) rotate(-3deg); }
+    .smiley.happy .eye { transform: translateY(-0.5px) scale(1.05, 1.2); }
+    .smiley.happy .mouth { transform: scale(1.04, 1.15); }
+
+    .top {
+      position: fixed;
+      top: 1.5rem;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    .top time { font-variant-numeric: tabular-nums; margin-left: 0.875rem; }
+
+    main, .top { position: relative; z-index: 1; }
+    .top { position: fixed; }
+    .bouncer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 40px;
+      height: 40px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .bouncer svg { width: 100%; height: 100%; overflow: visible; }
+    .bouncer svg * {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .bouncer svg circle, body.blue .smiley svg circle { fill: var(--blue); }
+    body.blue .bouncer { opacity: 1; }
+
+  </style>
+</head>
+<body>
+  <header class="top">
+    <span>San Francisco, CA</span><time id="clock"></time>
+  </header>
+
+  <main>
+    <div class="smiley" id="smiley" role="img" aria-label="Smiley face">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="44" />
+        <path class="eye" d="M31 45 a4.5 4.5 0 0 1 9 0" />
+        <path class="eye" d="M60 45 a4.5 4.5 0 0 1 9 0" />
+        <path d="M50 36.5 L57.5 52 L50 52" />
+        <path class="mouth" d="M25 56 C27 86, 73 86, 75 56" />
+      </svg>
+    </div>
+    <h1>Mercedes Bazan</h1>
+    <a href="mailto:mechibaz@gmail.com">mechibaz@gmail.com</a>
+    <nav>
+      <a href="https://www.behance.net/mercedesbazan" target="_blank" rel="noopener">Behance</a>
+      <a href="https://www.instagram.com/mechibaz" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://www.linkedin.com/in/mercedes-bazan-2021bb21/" target="_blank" rel="noopener">LinkedIn</a>
+    </nav>
+  </main>
+
+  <script>
+    (function () {
+      var clock = document.getElementById('clock');
+      var fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+      });
+      function tick() { clock.textContent = fmt.format(new Date()); }
+      tick();
+      setInterval(tick, 1000);
+    })();
+
+    (function () {
+      var smiley = document.getElementById('smiley');
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var locked = false;
+      var clicks = 0, MAX_CLICKS = 20;
+
+      // DVD-style bouncing smileys (blue mode)
+      var svgMarkup = smiley.querySelector('svg').outerHTML;
+      var bouncers = [], raf = null, lastT = 0, START_COUNT = 8, SIZE = 40;
+
+      function addBouncers(n, fromFace) {
+        var r = smiley.getBoundingClientRect();
+        for (var i = 0; i < n; i++) {
+          var el = document.createElement('div');
+          el.className = 'bouncer';
+          el.innerHTML = svgMarkup;
+          document.body.appendChild(el);
+          var speed = 70 + Math.random() * 90; // px per second
+          var a = Math.random() * Math.PI * 2;
+          bouncers.push({
+            el: el,
+            x: fromFace ? r.left + r.width / 2 - SIZE / 2 : Math.random() * (innerWidth - SIZE),
+            y: fromFace ? r.top + r.height / 2 - SIZE / 2 : Math.random() * (innerHeight - SIZE),
+            vx: Math.cos(a) * speed,
+            vy: Math.sin(a) * speed
+          });
+        }
+      }
+
+      function clearBouncers() {
+        bouncers.forEach(function (b) { b.el.remove(); });
+        bouncers = [];
+      }
+
+      function startBouncers() {
+        if (reduce) return;
+        if (!bouncers.length) addBouncers(START_COUNT, false);
+        lastT = performance.now();
+        if (!raf) raf = requestAnimationFrame(step);
+      }
+
+      function stopBouncers() {
+        // let them fade out, then stop moving
+        setTimeout(function () {
+          if (!document.body.classList.contains('blue') && raf) {
+            cancelAnimationFrame(raf);
+            raf = null;
+          }
+        }, 450);
+      }
+
+      function step(t) {
+        var dt = Math.min((t - lastT) / 1000, 0.05);
+        lastT = t;
+        var maxX = innerWidth - SIZE, maxY = innerHeight - SIZE;
+        for (var i = 0; i < bouncers.length; i++) {
+          var b = bouncers[i];
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          if (b.x <= 0) { b.x = 0; b.vx = Math.abs(b.vx); }
+          if (b.x >= maxX) { b.x = maxX; b.vx = -Math.abs(b.vx); }
+          if (b.y <= 0) { b.y = 0; b.vy = Math.abs(b.vy); }
+          if (b.y >= maxY) { b.y = maxY; b.vy = -Math.abs(b.vy); }
+          b.el.style.transform = 'translate(' + b.x + 'px,' + b.y + 'px)';
+        }
+        raf = requestAnimationFrame(step);
+      }
+
+      function setBlue(on) {
+        document.body.classList.toggle('blue', on);
+        if (on) startBouncers(); else stopBouncers();
+      }
+
+      function reset() {
+        locked = false;
+        clicks = 0;
+        setBlue(false);
+        setTimeout(function () {
+          if (!document.body.classList.contains('blue')) clearBouncers();
+        }, 450);
+      }
+
+      // Each click keeps it blue and adds more faces, more each time.
+      // On the 20th click it's packed, then everything clears back to black.
+      smiley.addEventListener('click', function () {
+        clicks++;
+        if (clicks >= MAX_CLICKS) { reset(); return; }
+        locked = true;
+        setBlue(true);
+        if (!reduce) addBouncers(4 + Math.round(clicks * 1.6), true);
+        smiley.classList.add('happy');
+        setTimeout(function () { smiley.classList.remove('happy'); }, 300);
+      });
+    })();
+  </script>
+</body>
+</html>
