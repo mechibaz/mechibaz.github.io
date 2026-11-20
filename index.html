@@ -76,9 +76,7 @@
     .smiley .mouth { transform-origin: center top; }
 
     .smiley:hover { transform: translateY(-2px) rotate(-4deg); }
-    .smiley.happy { transform: scale(1.05) rotate(-3deg); }
-    .smiley.happy .eye { transform: translateY(-0.5px) scale(1.05, 1.2); }
-    .smiley.happy .mouth { transform: scale(1.04, 1.15); }
+    .smiley.happy { transform: rotate(-10deg); }
 
     .top {
       position: fixed;
@@ -160,6 +158,41 @@
     }
     .message.show { opacity: 1; }
 
+    /* ---- Modes ---- */
+    .phys-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .phys-layer > div { position: absolute; top: 0; left: 0; will-change: transform; }
+    .fall-letter {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-weight: 800;
+      line-height: 0.82;
+      padding-top: 0.06em;
+      color: #fff;
+      letter-spacing: 0;
+    }
+    .fall-shape svg { display: block; }
+    body.cream { background: #efebe3; color: var(--blue); }
+    body.cream a { color: var(--blue); text-decoration-color: rgba(31, 61, 255, 0.4); }
+    body.cream a:hover { color: #000; text-decoration-color: #000; }
+    body.cream .top { color: rgba(31, 61, 255, 0.75); }
+    body.cream .smiley svg * { stroke: var(--blue); }
+    body.cream .zzz { color: var(--blue); }
+    body.paper { background: #fff; color: #000; }
+    body.paper .fall-letter { color: #000; }
+    body.paper a { color: #000; text-decoration-color: rgba(0, 0, 0, 0.35); }
+    body.paper a:hover { color: var(--blue); text-decoration-color: var(--blue); }
+    body.paper .top { color: rgba(0, 0, 0, 0.6); }
+    body.paper .smiley svg * { stroke: #000; }
+    body.paper .zzz { color: #000; }
+    body.bluepaper { background: var(--blue); color: #efebe3; }
+    body.bluepaper a { color: #efebe3; text-decoration-color: rgba(239, 235, 227, 0.45); }
+    body.bluepaper a:hover { color: #000; text-decoration-color: #000; }
+    body.bluepaper .top { color: rgba(239, 235, 227, 0.8); }
+    body.bluepaper .smiley svg * { stroke: #efebe3; }
+    .three-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
+    .glitch-layer { position: fixed; inset: 0; pointer-events: none; z-index: 4; mix-blend-mode: normal; }
+    .glitch-sq { position: absolute; }
+    body.glitching main { text-shadow: 3px 0 #ff3fa4, -3px 0 #00e5ff; }
+
   </style>
 </head>
 <body>
@@ -191,6 +224,25 @@
       <a href="https://www.linkedin.com/in/mercedes-bazan-2021bb21/" target="_blank" rel="noopener">LinkedIn</a>
     </nav>
   </main>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="grain" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="8" result="fine"/>
+      <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.94  0 0 0 0 0.92  0 0 0 0 0.89  0 0 0 9 -6.2" result="specks"/>
+      <feComposite in="specks" in2="rough" operator="in" result="specksIn"/>
+      <feMerge><feMergeNode in="rough"/><feMergeNode in="specksIn"/></feMerge>
+    </filter>
+    <filter id="grainBlue" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="8" result="fine"/>
+      <feColorMatrix in="fine" type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.24  0 0 0 0 1  0 0 0 9 -6.2" result="specks"/>
+      <feComposite in="specks" in2="rough" operator="in" result="specksIn"/>
+      <feMerge><feMergeNode in="rough"/><feMergeNode in="specksIn"/></feMerge>
+    </filter>
+  </svg>
 
   <div class="message" id="message" aria-live="polite"></div>
 
@@ -306,10 +358,349 @@
         wrap.classList.toggle('tired', on);
       }
 
+      // ------------------------------------------------------------
+      // Random mode per visit: smileys | letters | faces3d | shapes | glitch
+      // (add ?mode=letters etc. to the URL to force one)
+      // ------------------------------------------------------------
+      var MODES = ['smileys', 'letters', 'lettersXL', 'faces3d', 'shapes', 'shapesXL', 'glitch'];
+      var forced = new URLSearchParams(location.search).get('mode');
+      var mode = MODES.indexOf(forced) >= 0 ? forced : MODES[Math.floor(Math.random() * MODES.length)];
+      document.documentElement.setAttribute('data-mode', mode);
+
+      var BLUE = '#1f3dff';
+      function loadScript(src) {
+        return new Promise(function (res, rej) {
+          var s = document.createElement('script');
+          s.src = src; s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+
+      // ---------- Physics (letters + shapes) ----------
+      var MATTER_URL = 'https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js';
+      var physics = null, physicsReady = null;
+      function getPhysics() {
+        if (physicsReady) return physicsReady;
+        physicsReady = (window.Matter ? Promise.resolve() : loadScript(MATTER_URL)).then(function () {
+          var M = window.Matter;
+          var engine = M.Engine.create();
+          engine.gravity.y = 1.1;
+          var layer = document.createElement('div');
+          layer.className = 'phys-layer';
+          document.body.appendChild(layer);
+          var T = 200, walls = [];
+          function buildWalls() {
+            walls.forEach(function (w) { M.Composite.remove(engine.world, w); });
+            var W = innerWidth, H = innerHeight;
+            walls = [
+              M.Bodies.rectangle(W / 2, H + T / 2, W * 3, T, { isStatic: true }),
+              M.Bodies.rectangle(-T / 2, H / 2 - 2000, T, H * 2 + 4000, { isStatic: true }),
+              M.Bodies.rectangle(W + T / 2, H / 2 - 2000, T, H * 2 + 4000, { isStatic: true })
+            ];
+            M.Composite.add(engine.world, walls);
+          }
+          buildWalls();
+          addEventListener('resize', buildWalls);
+          var items = [], raf = null, last = 0;
+          function step(t) {
+            var dt = Math.min(t - last, 32); last = t;
+            M.Engine.update(engine, dt);
+            for (var i = 0; i < items.length; i++) {
+              var it = items[i], b = it.body;
+              it.el.style.transform = 'translate(' + (b.position.x - it.ox) + 'px,' + (b.position.y - it.oy) + 'px) rotate(' + b.angle + 'rad)';
+            }
+            raf = requestAnimationFrame(step);
+          }
+          physics = {
+            M: M, engine: engine, layer: layer, items: items,
+            add: function (body, el, ox, oy) {
+              el.style.transformOrigin = ox + 'px ' + oy + 'px';
+              layer.appendChild(el);
+              M.Composite.add(engine.world, body);
+              items.push({ body: body, el: el, ox: ox, oy: oy });
+              if (!raf) { last = performance.now(); raf = requestAnimationFrame(step); }
+            },
+            clear: function () {
+              items.forEach(function (it) { M.Composite.remove(engine.world, it.body); it.el.remove(); });
+              items.length = 0;
+              if (raf) { cancelAnimationFrame(raf); raf = null; }
+            }
+          };
+          return physics;
+        });
+        return physicsReady;
+      }
+
+      // ---------- 2. Falling MECHIBAZ letters ----------
+      var LETTERS = 'MECHIBAZ'.split('');
+      function dropLetters(xl) {
+        getPhysics().then(function (P) {
+          if (P.items.length >= (xl ? 24 : 48)) return;
+          var size = xl ? Math.max(90, Math.min(innerWidth * 0.2, 290)) : Math.max(60, Math.min(innerWidth * 0.125, 175));
+          LETTERS.forEach(function (ch, i) {
+            setTimeout(function () {
+              var el = document.createElement('div');
+              el.className = 'fall-letter';
+              el.textContent = ch;
+              el.style.fontSize = size + 'px';
+              P.layer.appendChild(el);
+              var w = el.offsetWidth, h = el.offsetHeight;
+              var x = w / 2 + Math.random() * (innerWidth - w);
+              var body = P.M.Bodies.rectangle(x, -h - Math.random() * 120, w, h * 0.78, {
+                restitution: 0.15, friction: 0.6, density: 0.002, chamfer: { radius: 4 }
+              });
+              P.M.Body.setAngle(body, (Math.random() - 0.5) * 0.8);
+              P.M.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+              P.add(body, el, w / 2, h / 2);
+            }, i * 70);
+          });
+        });
+      }
+
+      // ---------- 4. Falling grainy shapes (poster lab) ----------
+      var MAX_SHAPES = 40;
+      function starPath(cx, cy, R, r, n) {
+        var d = '';
+        for (var i = 0; i < n * 2; i++) {
+          var rad = i % 2 ? r : R, a = -Math.PI / 2 + i * Math.PI / n;
+          d += (i ? 'L' : 'M') + (cx + rad * Math.cos(a)).toFixed(1) + ' ' + (cy + rad * Math.sin(a)).toFixed(1);
+        }
+        return d + 'Z';
+      }
+      function shapeSvg(w, h, inner) {
+        var f = mode === 'shapesXL' ? 'grainBlue' : 'grain';
+        return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" overflow="visible"><g filter="url(#' + f + ')">' + inner + '</g></svg>';
+      }
+      function dropShape(xl) {
+        getPhysics().then(function (P) {
+          if (P.items.length >= (xl ? 22 : MAX_SHAPES)) return;
+          var BLUE = xl ? '#efebe3' : '#1f3dff';
+          var M = P.M, s = xl ? Math.max(130, Math.min(innerWidth * 0.3, 400)) : Math.max(95, Math.min(innerWidth * 0.19, 260));
+          var kind = ['triangle', 'star', 'blob', 'tile', 'circle'][Math.floor(Math.random() * 5)];
+          var x = s + Math.random() * (innerWidth - 2 * s), y = -s * 1.2;
+          var opts = { restitution: 0.1, friction: 0.7, density: 0.002 };
+          var body, svg, w, h;
+          if (kind === 'triangle') {
+            body = M.Bodies.polygon(x, y, 3, s * 0.62, opts);
+            var c = body.position, pts = body.vertices.map(function (v) { return [v.x - c.x, v.y - c.y]; });
+            var minX = Math.min.apply(null, pts.map(function (p) { return p[0]; }));
+            var minY = Math.min.apply(null, pts.map(function (p) { return p[1]; }));
+            w = Math.max.apply(null, pts.map(function (p) { return p[0]; })) - minX;
+            h = Math.max.apply(null, pts.map(function (p) { return p[1]; })) - minY;
+            var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + (p[0] - minX).toFixed(1) + ' ' + (p[1] - minY).toFixed(1); }).join('') + 'Z';
+            svg = shapeSvg(w, h, '<path d="' + d + '" fill="' + BLUE + '"/>');
+            var el = wrapEl(svg); P.add(body, el, -minX, -minY);
+          } else if (kind === 'star') {
+            var R = s * 0.6;
+            body = M.Bodies.polygon(x, y, 5, R * 0.72, opts);
+            w = h = R * 2;
+            svg = shapeSvg(w, h, '<path d="' + starPath(R, R, R, R * 0.45, 6) + '" fill="' + BLUE + '"/>');
+            P.add(body, wrapEl(svg), R, R);
+          } else if (kind === 'blob') {
+            var r = s * 0.55;
+            body = M.Bodies.circle(x, y, r, opts);
+            w = h = r * 2;
+            var k = r, d2 = 'M' + (k * 0.15) + ' ' + (k * 0.9) + ' C' + (k * 0.05) + ' ' + (k * 0.2) + ',' + (k * 0.9) + ' ' + (-k * 0.05) + ',' + (k * 1.5) + ' ' + (k * 0.2) +
+              ' C' + (k * 2.1) + ' ' + (k * 0.45) + ',' + (k * 2.05) + ' ' + (k * 1.25) + ',' + (k * 1.75) + ' ' + (k * 1.6) +
+              ' C' + (k * 1.4) + ' ' + (k * 2.05) + ',' + (k * 0.6) + ' ' + (k * 2.05) + ',' + (k * 0.3) + ' ' + (k * 1.6) +
+              ' C' + (k * 0.12) + ' ' + (k * 1.35) + ',' + (k * 0.18) + ' ' + (k * 1.1) + ',' + (k * 0.15) + ' ' + (k * 0.9) + 'Z';
+            svg = shapeSvg(w, h, '<path d="' + d2 + '" fill="' + BLUE + '"/>');
+            P.add(body, wrapEl(svg), r, r);
+          } else if (kind === 'tile') {
+            w = h = s * 1.05;
+            body = M.Bodies.rectangle(x, y, w, h, Object.assign({ chamfer: { radius: s * 0.08 } }, opts));
+            var rr = s * 0.08;
+            var rect = 'M' + rr + ' 0H' + (w - rr) + 'Q' + w + ' 0 ' + w + ' ' + rr + 'V' + (h - rr) + 'Q' + w + ' ' + h + ' ' + (w - rr) + ' ' + h + 'H' + rr + 'Q0 ' + h + ' 0 ' + (h - rr) + 'V' + rr + 'Q0 0 ' + rr + ' 0Z';
+            svg = shapeSvg(w, h, '<path fill-rule="evenodd" d="' + rect + starPath(w / 2, h / 2 + w * 0.03, w * 0.36, w * 0.15, 5) + '" fill="' + BLUE + '"/>');
+            P.add(body, wrapEl(svg), w / 2, h / 2);
+          } else {
+            var r2 = s * 0.42;
+            body = M.Bodies.circle(x, y, r2, opts);
+            w = h = r2 * 2;
+            svg = shapeSvg(w, h, '<circle cx="' + r2 + '" cy="' + r2 + '" r="' + r2 + '" fill="' + BLUE + '"/>');
+            P.add(body, wrapEl(svg), r2, r2);
+          }
+          M.Body.setAngle(body, Math.random() * Math.PI * 2);
+          M.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.06);
+        });
+      }
+      function wrapEl(svg) {
+        var el = document.createElement('div');
+        el.className = 'fall-shape';
+        el.innerHTML = svg;
+        return el;
+      }
+
+      // ---------- 3. 3D smiley spheres ----------
+      var THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js';
+      var three = null, threeReady = null, MAX_3D = 60;
+      function getThree() {
+        if (threeReady) return threeReady;
+        threeReady = import(THREE_URL).then(function (THREE) {
+          var canvas = document.createElement('canvas');
+          canvas.className = 'three-layer';
+          document.body.appendChild(canvas);
+          var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+          renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+          var scene = new THREE.Scene();
+          var camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+          camera.position.z = 14;
+          scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+          var key = new THREE.DirectionalLight(0xffffff, 2.2);
+          key.position.set(-4, 6, 8); scene.add(key);
+          var rim = new THREE.DirectionalLight(0x9fb0ff, 1.2);
+          rim.position.set(6, -3, -4); scene.add(rim);
+          function size() {
+            renderer.setSize(innerWidth, innerHeight, false);
+            camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+          }
+          size(); addEventListener('resize', size);
+
+          // Face texture drawn from the same SVG paths as the logo
+          var tc = document.createElement('canvas'); tc.width = 1024; tc.height = 512;
+          var g = tc.getContext('2d');
+          g.fillStyle = BLUE; g.fillRect(0, 0, 1024, 512);
+          g.save(); g.translate(256 - 150, 256 - 150); g.scale(3, 3);
+          g.strokeStyle = '#fff'; g.lineWidth = 4.4; g.lineCap = 'round'; g.lineJoin = 'round';
+          ['M31 45 a4.5 4.5 0 0 1 9 0', 'M60 45 a4.5 4.5 0 0 1 9 0', 'M50 36.5 L57.5 52 L50 52', 'M25 56 C27 86, 73 86, 75 56']
+            .forEach(function (d) { g.stroke(new Path2D(d)); });
+          g.restore();
+          var tex = new THREE.CanvasTexture(tc);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 4;
+          var geo = new THREE.SphereGeometry(1, 48, 32);
+          var mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.05 });
+
+          var balls = [], raf = null, last = 0;
+          function bounds() {
+            var hh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+            return { x: hh * camera.aspect, y: hh };
+          }
+          function step(t) {
+            var dt = Math.min((t - last) / 1000, 0.05); last = t;
+            var B = bounds();
+            balls.forEach(function (b) {
+              var m = b.mesh, r = b.r;
+              m.position.addScaledVector(b.v, dt);
+              if (m.position.x < -B.x + r) { m.position.x = -B.x + r; b.v.x = Math.abs(b.v.x); }
+              if (m.position.x > B.x - r) { m.position.x = B.x - r; b.v.x = -Math.abs(b.v.x); }
+              if (m.position.y < -B.y + r) { m.position.y = -B.y + r; b.v.y = Math.abs(b.v.y); }
+              if (m.position.y > B.y - r) { m.position.y = B.y - r; b.v.y = -Math.abs(b.v.y); }
+              b.t += dt;
+              m.rotation.y = Math.sin(b.t * b.ws) * 0.9 + b.phase;
+              m.rotation.x = Math.sin(b.t * b.ws * 0.7 + 1) * 0.35;
+              m.rotation.z += b.spin * dt;
+              if (b.grow < 1) { b.grow = Math.min(1, b.grow + dt * 3); m.scale.setScalar(r * easeOut(b.grow)); }
+            });
+            renderer.render(scene, camera);
+            raf = requestAnimationFrame(step);
+          }
+          function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+          three = {
+            add: function (n) {
+              for (var i = 0; i < n && balls.length < MAX_3D; i++) {
+                var mesh = new THREE.Mesh(geo, mat);
+                var r = 0.55 + Math.random() * 0.6;
+                mesh.position.set(0, 1.2, (Math.random() - 0.5) * 2);
+                mesh.scale.setScalar(0.001);
+                scene.add(mesh);
+                var a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 2.5;
+                balls.push({ mesh: mesh, r: r, v: new THREE.Vector3(Math.cos(a) * sp, Math.sin(a) * sp, 0),
+                  t: 0, ws: 0.6 + Math.random() * 0.8, phase: (Math.random() - 0.5) * 0.6, spin: (Math.random() - 0.5) * 0.6, grow: 0 });
+              }
+              if (!raf) { last = performance.now(); raf = requestAnimationFrame(step); }
+            },
+            clear: function () {
+              balls.forEach(function (b) { scene.remove(b.mesh); });
+              balls.length = 0;
+              renderer.render(scene, camera);
+              if (raf) { cancelAnimationFrame(raf); raf = null; }
+            }
+          };
+          return three;
+        });
+        return threeReady;
+      }
+
+      // ---------- 5. Glitch ----------
+      var glitchUntil = 0, glitchTimer = null, glitchLayer = null;
+      var GLITCH_COLORS = [BLUE, '#ff3fa4', '#ffe14d', '#2ee59d', '#ff6a2b', '#ffffff', '#00e5ff'];
+      function glitch() {
+        if (reduce) return;
+        if (!glitchLayer) {
+          glitchLayer = document.createElement('div');
+          glitchLayer.className = 'glitch-layer';
+          document.body.appendChild(glitchLayer);
+        }
+        glitchUntil = Math.max(glitchUntil, performance.now()) + 1400;
+        if (glitchTimer) return;
+        document.body.classList.add('glitching');
+        glitchTimer = setInterval(function () {
+          var now = performance.now();
+          if (now > glitchUntil) { stopGlitch(); return; }
+          var n = 4 + Math.floor(Math.random() * 8);
+          for (var i = 0; i < n; i++) {
+            var q = document.createElement('div');
+            q.className = 'glitch-sq';
+            var big = Math.random() < 0.18;
+            var w = big ? 20 + Math.random() * 70 : 1 + Math.random() * 14;
+            var h = big ? 2 + Math.random() * 10 : w * (0.4 + Math.random() * 1.6);
+            q.style.cssText = 'left:' + (Math.random() * 100) + 'vw;top:' + (Math.random() * 100) + 'vh;width:' + w + 'vw;height:' + h + 'vh;background:' + GLITCH_COLORS[Math.floor(Math.random() * GLITCH_COLORS.length)];
+            glitchLayer.appendChild(q);
+            setTimeout(function (el) { return function () { el.remove(); }; }(q), 60 + Math.random() * 220);
+          }
+          var main = document.querySelector('main');
+          var dx = (Math.random() - 0.5) * 18, top = Math.random() * 80;
+          main.style.transform = 'translateX(' + dx + 'px)';
+          main.style.clipPath = Math.random() < 0.5 ? 'inset(' + top + '% 0 ' + (100 - top - 8 - Math.random() * 20) + '% 0)' : '';
+          document.body.style.filter = Math.random() < 0.25 ? 'hue-rotate(' + Math.floor(Math.random() * 360) + 'deg) invert(' + (Math.random() < 0.3 ? 1 : 0) + ')' : '';
+        }, 70);
+      }
+      function stopGlitch() {
+        clearInterval(glitchTimer); glitchTimer = null;
+        document.body.classList.remove('glitching');
+        var main = document.querySelector('main');
+        main.style.transform = ''; main.style.clipPath = '';
+        document.body.style.filter = '';
+        if (glitchLayer) glitchLayer.innerHTML = '';
+      }
+
+      // Preload what this visit's mode needs so the first click is instant
+      if (/^(letters|shapes)/.test(mode)) getPhysics().catch(function () {});
+      if (mode === 'faces3d') getThree().catch(function () {});
+
+      function runMode() {
+        if (mode === 'smileys') {
+          locked = true;
+          setBlue(true);
+          if (!reduce && bouncers.length < MAX_FACES) {
+            addBouncers(Math.min(4 + Math.round(clicks * 1.6), MAX_FACES - bouncers.length), true);
+          }
+        } else if (mode === 'letters' || mode === 'lettersXL') {
+          if (mode === 'lettersXL') document.body.classList.add('paper');
+          dropLetters(mode === 'lettersXL');
+        } else if (mode === 'shapes' || mode === 'shapesXL') {
+          var xl = mode === 'shapesXL';
+          document.body.classList.add(xl ? 'bluepaper' : 'cream');
+          dropShape(xl); if (clicks === 1) { dropShape(xl); if (!xl) dropShape(xl); }
+        } else if (mode === 'faces3d') {
+          getThree().then(function (T) { T.add(clicks === 1 ? 6 : 3); });
+        } else if (mode === 'glitch') {
+          glitch();
+        }
+      }
+
+      function clearModes() {
+        if (physics) physics.clear();
+        if (three) three.clear();
+        stopGlitch();
+        glitchUntil = 0;
+        document.body.classList.remove('cream', 'paper', 'bluepaper');
+      }
+
       // Stop fast clicks from selecting the text underneath
       smiley.addEventListener('mousedown', function (e) { e.preventDefault(); });
 
-      // Clicks: blue + more faces each time (capped so the page stays smooth).
       // 150 clicks: a message. 300: "nice". 600: back to black, tired face, no more clicking.
       smiley.addEventListener('click', function () {
         if (done) return;
@@ -318,6 +709,7 @@
         if (clicks >= 600) {
           done = true;
           reset();
+          clearModes();
           setTired(true);
           smiley.classList.add('done');
           clearTimeout(msgTimer);
@@ -325,11 +717,7 @@
           return;
         }
 
-        locked = true;
-        setBlue(true);
-        if (!reduce && bouncers.length < MAX_FACES) {
-          addBouncers(Math.min(4 + Math.round(clicks * 1.6), MAX_FACES - bouncers.length), true);
-        }
+        runMode();
 
         if (clicks === 150) showMessage('why are you clicking so much? :)');
         if (clicks === 300) showMessage('nice');
