@@ -412,13 +412,14 @@
         lettersXL: ['letters', 'ink', true], lettersXLblue: ['letters', 'paper', true],
         shapesXL: ['shapes', 'pool', true]
       };
-      var FAMILIES = ['smileys', 'smileysXL', 'faces3d', 'flowers', 'letters', 'shapes', 'mix', 'letters3d', 'shapes3d'];
+      var FAMILIES = ['smileys', 'smileysXL', 'faces3d', 'flowers', 'letters', 'shapes', 'mix'];
+      var RARE3D = ['letters3d', 'shapes3d']; // rare: ~4% of visits, or unlocked by staying a while
       function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
       var forced = params.get('mode'), mode, palette = null, xl = false;
       if (LEGACY[forced]) {
         mode = LEGACY[forced][0]; palette = LEGACY[forced][1]; xl = LEGACY[forced][2];
       } else {
-        mode = FAMILIES.indexOf(forced) >= 0 ? forced : pick(FAMILIES);
+        mode = FAMILIES.concat(RARE3D).indexOf(forced) >= 0 ? forced : (Math.random() < 0.04 ? pick(RARE3D) : pick(FAMILIES));
         if (/^(letters|shapes|mix)(3d)?$/.test(mode)) {
           palette = PALETTES[params.get('palette')] ? params.get('palette') : pick(PNAMES);
           xl = params.has('size') ? params.get('size') === 'xl' : Math.random() < 0.5;
@@ -1032,6 +1033,26 @@
         themed = false;
       }
 
+      // Stay long enough (75s) and the next click switches to a 3D mode
+      var upgrade3d = false;
+      if (!/3d$/.test(mode) || mode === 'faces3d') {
+        setTimeout(function () {
+          if (done) return;
+          upgrade3d = true;
+          palette = pick(PNAMES); xl = Math.random() < 0.5;
+          getFall3d().catch(function () {}); // preload quietly
+        }, 75000);
+      }
+      function switchTo3d() {
+        upgrade3d = false;
+        clearModes();
+        locked = false;
+        setBlue(false);
+        clearBouncers();
+        mode = pick(RARE3D);
+        document.documentElement.setAttribute('data-mode', mode + '-' + palette + (xl ? '-xl' : '') + '-unlocked');
+      }
+
       // Stop fast clicks from selecting the text underneath
       smiley.addEventListener('mousedown', function (e) { e.preventDefault(); });
 
@@ -1051,6 +1072,7 @@
           return;
         }
 
+        if (upgrade3d) switchTo3d();
         runMode();
 
         if (clicks === 150) showMessage('why are you clicking so much? :)');
