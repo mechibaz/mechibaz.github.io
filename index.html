@@ -274,6 +274,12 @@
 
   <div class="message" id="message" aria-live="polite"></div>
 
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
   <script>
     (function () {
       var clock = document.getElementById('clock');
@@ -406,14 +412,14 @@
         lettersXL: ['letters', 'ink', true], lettersXLblue: ['letters', 'paper', true],
         shapesXL: ['shapes', 'pool', true]
       };
-      var FAMILIES = ['smileys', 'smileysXL', 'faces3d', 'flowers', 'letters', 'shapes', 'mix'];
+      var FAMILIES = ['smileys', 'smileysXL', 'faces3d', 'flowers', 'letters', 'shapes', 'mix', 'letters3d', 'shapes3d'];
       function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
       var forced = params.get('mode'), mode, palette = null, xl = false;
       if (LEGACY[forced]) {
         mode = LEGACY[forced][0]; palette = LEGACY[forced][1]; xl = LEGACY[forced][2];
       } else {
         mode = FAMILIES.indexOf(forced) >= 0 ? forced : pick(FAMILIES);
-        if (/^(letters|shapes|mix)$/.test(mode)) {
+        if (/^(letters|shapes|mix)(3d)?$/.test(mode)) {
           palette = PALETTES[params.get('palette')] ? params.get('palette') : pick(PNAMES);
           xl = params.has('size') ? params.get('size') === 'xl' : Math.random() < 0.5;
         }
@@ -830,9 +836,149 @@
         flowers.length = 0;
       }
 
+      // ---------- 3D letters + 3D shapes (2D physics, 3D rendering) ----------
+      var fall3d = null, fall3dReady = null;
+      function getFall3d() {
+        if (fall3dReady) return fall3dReady;
+        fall3dReady = Promise.all([
+          import('three'),
+          import('three/addons/loaders/FontLoader.js'),
+          import('three/addons/geometries/TextGeometry.js'),
+          getPhysics()
+        ]).then(function (mods) {
+          var THREE = mods[0], FontLoader = mods[1].FontLoader, TextGeometry = mods[2].TextGeometry, P = mods[3];
+          return new Promise(function (res) {
+            new FontLoader().load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json', function (font) {
+              res(build(THREE, TextGeometry, P, font));
+            });
+          });
+        });
+        function build(THREE, TextGeometry, P, font) {
+          var canvas = document.createElement('canvas');
+          canvas.className = 'three-layer';
+          document.body.appendChild(canvas);
+          var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+          renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+          var scene = new THREE.Scene();
+          var camera = new THREE.PerspectiveCamera(35, 1, 1, 20000);
+          scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+          var key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(-0.5, 0.8, 1); scene.add(key);
+          var fill = new THREE.DirectionalLight(0xffffff, 0.6); fill.position.set(0.6, -0.3, 0.5); scene.add(fill);
+          function size() {
+            renderer.setSize(innerWidth, innerHeight, false);
+            camera.aspect = innerWidth / innerHeight;
+            camera.position.set(0, 0, (innerHeight / 2) / Math.tan(THREE.MathUtils.degToRad(17.5)));
+            camera.updateProjectionMatrix();
+          }
+          size(); addEventListener('resize', size);
+          var pal = PALETTES[palette] || PALETTES.night;
+          var mat = new THREE.MeshStandardMaterial({ color: pal.ink, roughness: 0.42, metalness: 0.05 });
+          var items = [], raf = null;
+          function loop() {
+            for (var i = 0; i < items.length; i++) {
+              var b = items[i].body, g = items[i].group;
+              g.position.set(b.position.x - innerWidth / 2, innerHeight / 2 - b.position.y, 0);
+              items[i].spin.rotation.z = -b.angle;
+            }
+            renderer.render(scene, camera);
+            raf = requestAnimationFrame(loop);
+          }
+          function addMesh(geo, body) {
+            var mesh = new THREE.Mesh(geo, mat);
+            var spin = new THREE.Group(); spin.add(mesh);
+            var group = new THREE.Group(); group.add(spin);
+            group.rotation.set(0.28 + Math.random() * 0.2, (Math.random() - 0.5) * 0.5, 0);
+            scene.add(group);
+            var ghost = document.createElement('div'); ghost.style.display = 'none';
+            P.add(body, ghost, 0, 0);
+            items.push({ body: body, group: group, spin: spin });
+            if (!raf) raf = requestAnimationFrame(loop);
+          }
+          function extrude(shape, depth) {
+            var geo = new THREE.ExtrudeGeometry(shape, { depth: depth, bevelEnabled: true, bevelThickness: depth * 0.12, bevelSize: depth * 0.08, bevelSegments: 3, curveSegments: 24 });
+            geo.translate(0, 0, -depth / 2);
+            return geo;
+          }
+          function shapeFrom(points) {
+            var s = new THREE.Shape();
+            points.forEach(function (p, i) { if (i) s.lineTo(p[0], -p[1]); else s.moveTo(p[0], -p[1]); });
+            s.closePath(); return s;
+          }
+          function starPts(R, r, n) {
+            var a = [];
+            for (var i = 0; i < n * 2; i++) { var rad = i % 2 ? r : R, t = -Math.PI / 2 + i * Math.PI / n; a.push([rad * Math.cos(t), rad * Math.sin(t)]); }
+            return a;
+          }
+          var opts = { restitution: 0.12, friction: 0.7, density: 0.002 };
+          function spawnX(w) { return innerWidth / 2 + (Math.random() - 0.5) * Math.max(0, innerWidth - w); }
+          fall3d = {
+            letter: function (ch, big) {
+              var fs = big ? Math.max(170, Math.min(innerWidth * 0.34, innerHeight * 0.6, 500)) : Math.max(50, Math.min(innerWidth * 0.1, 140));
+              var geo = new TextGeometry(ch, { font: font, size: fs, height: fs * 0.32, curveSegments: 10, bevelEnabled: true, bevelThickness: fs * 0.03, bevelSize: fs * 0.02, bevelSegments: 3 });
+              geo.computeBoundingBox(); geo.center();
+              var bb = geo.boundingBox, w = bb.max.x - bb.min.x, h = bb.max.y - bb.min.y;
+              var body = P.M.Bodies.rectangle(spawnX(w), -h - Math.random() * 150, w, h, Object.assign({ chamfer: { radius: 3 } }, opts));
+              P.M.Body.setAngle(body, (Math.random() - 0.5) * 0.8);
+              P.M.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+              addMesh(geo, body);
+            },
+            shape: function (big) {
+              var s = big ? Math.max(220, Math.min(innerWidth * 0.45, innerHeight * 0.7, 600)) : Math.max(80, Math.min(innerWidth * 0.15, 210));
+              var kind = pick(['triangle', 'star', 'blob', 'tile', 'circle']);
+              var x = spawnX(2 * s), y = -s * 1.3, M = P.M, body, shape, depth = s * 0.3;
+              if (kind === 'triangle') {
+                body = M.Bodies.polygon(x, y, 3, s * 0.62, opts);
+                shape = shapeFrom(body.vertices.map(function (v) { return [v.x - body.position.x, v.y - body.position.y]; }));
+              } else if (kind === 'star') {
+                var R = s * 0.6;
+                body = M.Bodies.polygon(x, y, 5, R * 0.72, opts);
+                shape = shapeFrom(starPts(R, R * 0.45, 6));
+              } else if (kind === 'blob') {
+                var r = s * 0.55, k = r;
+                body = M.Bodies.circle(x, y, r, opts);
+                shape = new THREE.Shape();
+                var Y = function (v) { return -(v - r); }, X = function (v) { return v - r; };
+                shape.moveTo(X(k * 0.15), Y(k * 0.9));
+                shape.bezierCurveTo(X(k * 0.05), Y(k * 0.2), X(k * 0.9), Y(-k * 0.05), X(k * 1.5), Y(k * 0.2));
+                shape.bezierCurveTo(X(k * 2.1), Y(k * 0.45), X(k * 2.05), Y(k * 1.25), X(k * 1.75), Y(k * 1.6));
+                shape.bezierCurveTo(X(k * 1.4), Y(k * 2.05), X(k * 0.6), Y(k * 2.05), X(k * 0.3), Y(k * 1.6));
+                shape.bezierCurveTo(X(k * 0.12), Y(k * 1.35), X(k * 0.18), Y(k * 1.1), X(k * 0.15), Y(k * 0.9));
+              } else if (kind === 'tile') {
+                var w = s * 1.05, rr = s * 0.08, hw = w / 2;
+                body = M.Bodies.rectangle(x, y, w, w, Object.assign({ chamfer: { radius: rr } }, opts));
+                shape = new THREE.Shape();
+                shape.moveTo(-hw + rr, -hw); shape.lineTo(hw - rr, -hw); shape.quadraticCurveTo(hw, -hw, hw, -hw + rr);
+                shape.lineTo(hw, hw - rr); shape.quadraticCurveTo(hw, hw, hw - rr, hw); shape.lineTo(-hw + rr, hw);
+                shape.quadraticCurveTo(-hw, hw, -hw, hw - rr); shape.lineTo(-hw, -hw + rr); shape.quadraticCurveTo(-hw, -hw, -hw + rr, -hw);
+                var hole = new THREE.Path();
+                starPts(w * 0.36, w * 0.15, 5).forEach(function (p, i) { if (i) hole.lineTo(p[0], -(p[1] + w * 0.03)); else hole.moveTo(p[0], -(p[1] + w * 0.03)); });
+                hole.closePath(); shape.holes.push(hole);
+              } else {
+                var r2 = s * 0.42;
+                body = M.Bodies.circle(x, y, r2, opts);
+                shape = new THREE.Shape(); shape.absarc(0, 0, r2, 0, Math.PI * 2, false);
+              }
+              M.Body.setAngle(body, Math.random() * Math.PI * 2);
+              M.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.06);
+              addMesh(extrude(shape, depth), body);
+            },
+            count: function () { return items.length; },
+            clear: function () {
+              items.forEach(function (it) { scene.remove(it.group); });
+              items.length = 0;
+              renderer.render(scene, camera);
+              if (raf) { cancelAnimationFrame(raf); raf = null; }
+            }
+          };
+          return fall3d;
+        }
+        return fall3dReady;
+      }
+
       // Preload what this visit's mode needs so the first click is instant
       if (/^(letters|shapes|mix)/.test(mode)) getPhysics().catch(function () {});
       if (mode === 'faces3d') getThree().catch(function () {});
+      if (/3d$/.test(mode) && mode !== 'faces3d') getFall3d().catch(function () {});
 
       function runMode() {
         if (mode === 'smileys') {
@@ -852,6 +998,18 @@
           if (mode === 'letters') dropLetters(xl);
           else if (mode === 'shapes') { dropShape(xl); if (clicks === 1 && !xl) { dropShape(xl); dropShape(xl); } }
           else dropMix(xl);
+        } else if (mode === 'letters3d' || mode === 'shapes3d') {
+          applyTheme();
+          getFall3d().then(function (F) {
+            var cap = mode === 'letters3d' ? (xl ? 10 : 32) : (xl ? 7 : 26);
+            if (F.count() >= cap) return;
+            if (mode === 'letters3d') {
+              var chars = xl ? [LETTERS[(clicks - 1) * 2 % 8], LETTERS[((clicks - 1) * 2 + 1) % 8]] : LETTERS;
+              chars.forEach(function (ch, i) { setTimeout(function () { F.letter(ch, xl); }, i * 80); });
+            } else {
+              F.shape(xl); if (clicks === 1 && !xl) { F.shape(false); F.shape(false); }
+            }
+          });
         } else if (mode === 'faces3d') {
           getThree().then(function (T) { T.add(clicks === 1 ? 6 : 3); });
         } else if (mode === 'glitch') {
@@ -866,6 +1024,7 @@
       function clearModes() {
         if (physics) physics.clear();
         if (three) three.clear();
+        if (fall3d) fall3d.clear();
         clearFlowers();
         stopGlitch();
         glitchUntil = 0;
